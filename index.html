@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+
+    <!-- Artwork comes from these two on first paint; getting DNS and TLS out of
+         the way early saves a round trip before the first tile can appear. -->
+    <link crossorigin href="https://wsrv.nl" rel="preconnect" />
+    <link crossorigin href="https://cdn.jsdelivr.net" rel="preconnect" />
+
+    <title>The Pokémon Wall</title>
+    <meta
+      name="description"
+      content="An interactive wall of every Pokémon. Search by name, type or rarity, hover to light up a whole evolution family, and open any Pokémon for its full stats."
+    />
+    <!-- Matches the surface the app paints, so mobile browser chrome blends in. -->
+    <meta name="theme-color" content="#efece5" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Pokémon Wall" />
+    <meta
+      property="og:description"
+      content="An interactive wall of every Pokémon. Search by name, type or rarity, hover to light up a whole evolution family, and open any Pokémon for its full stats."
+    />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

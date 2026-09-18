@@ -1,0 +1,105 @@
+@import 'tailwindcss';
+
+/* Instrument Sans, self-hosted. A neo-grotesque rather than the system stack:
+   the wordmark, the labels and the chips all carry the same voice, and it is
+   the same face on every platform instead of whatever `ui-sans-serif` resolves
+   to. One variable file covers 400-700. SIL Open Font License — see
+   public/fonts/OFL.txt. */
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/fonts/instrument-sans.woff2') format('woff2-variations');
+  font-weight: 400 700;
+  font-style: normal;
+  /* swap, not block: the wall is the point, and text arriving a frame late
+     beats an empty header while the font loads. */
+  font-display: swap;
+}
+
+/* The app uses one fixed palette, so only the tokens it actually spends are
+   defined. `line` and `muted` are ink at fixed alphas over the cream surface:
+   every hairline in the app is the first, every secondary label the second. */
+@theme inline {
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-line: rgb(0 0 0 / 0.45);
+  --color-muted: rgb(0 0 0 / 0.6);
+  --color-ring: var(--ring);
+}
+
+/* Registered so it computes to a real length: an unregistered custom property
+   holds the clamp() expression as text, and the scene needs to read the
+   resolved pixel value to line the wall's first column up with the title. */
+@property --gutter {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 24px;
+}
+
+:root {
+  /* The page gutter. The title, the counter and the wall's first column all
+     sit on it, so it is one value rather than three that drift apart. */
+  --gutter: clamp(20px, 3.2vw, 24px);
+  /* The wall's surface and ink. `body` carries them too, so the page behind the
+     app matches it — iOS Safari tints its top and bottom bars from the page
+     background, and a white body left them mismatched against the cream wall. */
+  --background: #efece5;
+  --foreground: #16150f;
+  /* Focus indicator. 0.708 measured 2.20:1 on the page surface; 2.4.11 needs
+     3.0. This is 5.09:1. */
+  --ring: oklch(0.5 0 0);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Focus, defined once. Three controls share it; the title button opts out
+   because a 2px offset crowds text that large. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* The app's one "something changed" transition — the expanded card, the search
+   field, the caption and the counter all fade on it. Kept here rather than
+   repeated inline so the four cannot drift apart. */
+@utility transition-state {
+  transition: opacity 340ms var(--ease-out, cubic-bezier(0, 0, 0.2, 1));
+}
+
+/* The stat bars fill on open. This has to be a keyframe, not a transition: the
+   card's contents are mounted only while it is open, so the bar's first paint
+   is already at its final width and a transition has nothing to run from. */
+@keyframes stat-fill {
+  from {
+    width: 0;
+  }
+}
+.stat-fill {
+  width: var(--stat-width);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stat-fill {
+    animation: stat-fill 620ms ease-out both;
+  }
+}
+
+/* type=search is here for the semantics and for the on-screen key label, not
+   for WebKit's clear button: it cannot be restyled, it sits at a different
+   inset from everything else, and it has no keyboard affordance. Replaced by a
+   real button in the markup. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Horizontal wall exploration: hide the scrollbar without disabling scrolling. */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
