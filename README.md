@@ -147,10 +147,16 @@ the frame that ingested it and the stall was charged against a live scroll.
 Smoothing is normalised against real frame time, so the wall decelerates
 identically at 60Hz and 120Hz.
 
+And when nothing is moving, it does not draw at all. A still wall looks exactly
+like the frame before it, so redrawing it is pure cost. The loop rests half a
+second after the last movement, long enough for the trailing fades to finish,
+and wakes on the next pointer move, scroll or search.
+
 Artwork is the real payload. Tiles render around 130px but the source art is
 475px PNG at roughly 141KB, which would be 8.3MB for a first screen of sixty.
-They are requested through a resizing proxy at 320px WebP instead, about 17KB
-each — a little over 1MB — and the full-size original is swapped in only for
+They are requested through a resizing proxy as WebP at the size the tile is
+actually drawn — 320px on a desktop, about 17KB each and a little over 1MB in
+all, and smaller on a phone — and the full-size original is swapped in only for
 the one tile that expands. Pages of sixty load as the wall approaches its tail,
 with a runway of scrollable space ahead of the loaded tiles so a fast fling
 never hits a wall while the next page is in flight.
