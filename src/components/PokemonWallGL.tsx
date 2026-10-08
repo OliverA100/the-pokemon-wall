@@ -15,6 +15,7 @@ import { PokemonCard } from './PokemonCard'
 import PokemonListA11y from './PokemonListA11y'
 import { TypeChips } from './TypeChips'
 
+/** index.html preloads the first page by URL, so it repeats this number. */
 const PAGE_SIZE = 60
 
 /**

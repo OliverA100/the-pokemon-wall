@@ -78,6 +78,16 @@ const FAMILY_DIM = 0.45
 const BUILD_PER_FRAME = 12
 /** Fade-in for each tile as its texture arrives, and fade-out when filtered. */
 const REVEAL_MS = GESTURE_MS
+/**
+ * How long the loop keeps drawing after the last thing moved. A still wall
+ * looks exactly like the frame before it, so redrawing it is pure cost. This
+ * outlasts the tweens that trail a movement (the dim and label fades), so they
+ * finish before the loop rests.
+ */
+const IDLE_GRACE_MS = 500
+/** Thumbnail widths the proxy is asked for. The smallest that covers a tile at
+ *  its device size wins, so a phone isn't sent a desktop's worth of pixels. */
+const THUMB_WIDTHS = [160, 240, 320]
 /** Symmetric cubic — the short tweens, where a snappier curve reads better. */
 const EASE_IN_OUT = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -230,6 +240,8 @@ export class WallScene {
     return this.layoutRows
   }
   private active: null | Pokemon = null // the tile being animated, open OR closing
+  /** The loop draws until this time, then rests; see IDLE_GRACE_MS. */
+  private awakeUntil = 0
   private bend = 0
   private camera: THREE.PerspectiveCamera
   /** Live layout metrics, recomputed from the viewport on every resize. */
@@ -252,6 +264,17 @@ export class WallScene {
   private focusId: null | number = null
   private focusNode: HTMLElement | null = null
   private frame = 0
+  /**
+   * Every tile is the same subdivided plane, scaled by its mesh, so they all
+   * share this one. A copy per tile was ~27KB of vertices each, uploaded to the
+   * GPU on first draw: 28MB and a buffer upload per tile across the full wall.
+   */
+  private geometry = new THREE.PlaneGeometry(
+    BASE_CELL,
+    BASE_CELL,
+    SEGMENTS,
+    SEGMENTS
+  )
   private gapX = 108
   private gapY = 34
   private group = new THREE.Group()
@@ -267,8 +290,18 @@ export class WallScene {
   private lastScrollX = 0
   private layoutRows = 5
   private lift = LIFT
+  /**
+   * Decodes artwork off the main thread, where an <img> handed to three is
+   * decoded inside the upload, on the frame that first draws it. Null where
+   * createImageBitmap ignores its options, which would upload it upside down.
+   */
+  private bitmapLoader = supportsImageBitmap()
+    ? new THREE.ImageBitmapLoader().setOptions({
+        imageOrientation: 'flipY',
+        premultiplyAlpha: 'none'
+      })
+    : null
   private loader = new THREE.TextureLoader()
-  private maxAnisotropy = 1
   private onFrame?: (time: number) => void
   private onHover: (pokemon: null | Pokemon) => void
   private onLabels?: (labels: WallLabel[]) => void
@@ -327,6 +360,8 @@ export class WallScene {
   }
   /** Extra horizontal offset applied by the sweep, in px. */
   private sweepOffset = 0
+  /** Proxy width for new tiles, picked from THUMB_WIDTHS on every resize. */
+  private thumbWidth = THUMB_WIDTHS[THUMB_WIDTHS.length - 1]
 
   private velocity = 0
 
@@ -349,13 +384,16 @@ export class WallScene {
     // Render into React's own canvas. Swapping in a new element (replaceWith)
     // breaks under StrictMode: the cleanup removes it, and the second mount
     // then calls replaceWith on a detached node, which silently does nothing.
+    // No MSAA: it only smooths geometry edges, and every tile's edge is the
+    // transparent margin around its artwork, which the fragment shader
+    // discards. At DPR 2 it was 4x the samples on a full-screen canvas for
+    // nothing visible.
     this.renderer = new THREE.WebGLRenderer({
       alpha: true,
-      antialias: true,
+      antialias: false,
       canvas
     })
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
-    this.maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy()
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 1, 6000)
     this.scene.add(this.group)
@@ -369,6 +407,11 @@ export class WallScene {
     window.addEventListener('pointerout', this.onPointerOut)
     window.addEventListener('pointercancel', this.onPointerCancel)
     window.addEventListener('keydown', this.onKeyDown)
+    // A resting loop draws nothing, and a browser may drop the canvas's last
+    // frame while the tab is hidden or when the GPU resets the context. Either
+    // way it needs drawing again, though nothing has moved.
+    document.addEventListener('visibilitychange', this.onWake)
+    canvas.addEventListener('webglcontextrestored', this.onWake)
     this.loop()
   }
 
@@ -379,6 +422,7 @@ export class WallScene {
    * already active reflows in place instead (see sync).
    */
   beginSweep(direction: -1 | 1) {
+    this.wake()
     if (this.sweep.phase !== 'idle') {
       // Same way as the one already running: let it land rather than yanking
       // the panel off-screen mid-flight; extendSweep absorbs mid-flight ones.
@@ -429,6 +473,7 @@ export class WallScene {
 
   collapse() {
     if (!this.selected) return
+    this.wake()
     this.selected = null
     this.tweenExpand(0)
     // The collapse tween normally clears `active`, but the loop only runs that
@@ -465,8 +510,14 @@ export class WallScene {
     window.removeEventListener('pointerout', this.onPointerOut)
     window.removeEventListener('pointercancel', this.onPointerCancel)
     window.removeEventListener('keydown', this.onKeyDown)
+    document.removeEventListener('visibilitychange', this.onWake)
+    this.renderer.domElement.removeEventListener(
+      'webglcontextrestored',
+      this.onWake
+    )
     for (const entry of this.entries) this.disposeEntry(entry)
     this.entries = []
+    this.geometry.dispose()
     this.renderer.dispose()
   }
 
@@ -510,11 +561,13 @@ export class WallScene {
   /** The focus ring, kept on its tile by the scene like the labels. */
   setFocusRingNode(node: HTMLElement | null) {
     this.focusNode = node
+    this.wake()
   }
 
   /** Which tile the ring sits on, or null to hide it. */
   setFocusTarget(id: null | number) {
     this.focusId = id
+    this.wake()
   }
 
   /**
@@ -523,6 +576,7 @@ export class WallScene {
    */
   setLabelNodes(nodes: Map<number, HTMLElement>) {
     this.labelNodes = nodes
+    this.wake()
   }
 
   /** Scroll position, pushed in by Lenis each frame. */
@@ -538,6 +592,7 @@ export class WallScene {
    * current results — tiles are simply appended.
    */
   sync(pokemon: Pokemon[], settled = true, queryKey = '') {
+    this.wake()
     // A different query, not the next page of the same one — the distinction
     // that lets a refinement reflow in place instead of being appended.
     const fresh = queryKey !== this.queryKey
@@ -742,9 +797,9 @@ export class WallScene {
       this.onHover(null)
     }
     this.group.remove(entry.mesh)
-    entry.mesh.geometry.dispose()
+    // The geometry is shared; only destroy() disposes it.
     const material = entry.mesh.material
-    ;(material.uniforms.uMap.value as null | THREE.Texture)?.dispose()
+    releaseTexture(material.uniforms.uMap.value as null | THREE.Texture)
     material.dispose()
   }
 
@@ -759,12 +814,6 @@ export class WallScene {
       // outgoing one until the travel completes and everything is renormalised.
       position.x += this.panelOffsetX
 
-      const geometry = new THREE.PlaneGeometry(
-        BASE_CELL,
-        BASE_CELL,
-        SEGMENTS,
-        SEGMENTS
-      )
       const material = new THREE.ShaderMaterial({
         depthWrite: false,
         fragmentShader: FRAGMENT,
@@ -793,7 +842,7 @@ export class WallScene {
         vertexShader: VERTEX
       })
 
-      const mesh = new THREE.Mesh(geometry, material)
+      const mesh = new THREE.Mesh(this.geometry, material)
       mesh.scale.setScalar(this.cell / BASE_CELL)
       mesh.position.x = position.x
       mesh.position.y = position.y
@@ -818,26 +867,34 @@ export class WallScene {
       this.entries.push(entry)
 
       const paint = (texture: THREE.Texture, reveal: boolean) => {
-        if (this.disposed) return
+        if (this.disposed) {
+          releaseTexture(texture)
+          return
+        }
         texture.colorSpace = THREE.SRGBColorSpace
-        texture.anisotropy = this.maxAnisotropy
+        // Thumbnails are sized to the tile, so they are drawn at about their
+        // own resolution: a mip chain would add a third to every texture's
+        // memory, and a GPU pass to every upload, for nothing visible.
+        texture.generateMipmaps = false
+        texture.minFilter = THREE.LinearFilter
         const previous = material.uniforms.uMap.value as null | THREE.Texture
         material.uniforms.uMap.value = texture
         material.uniforms.uHasMap.value = 1
         // Swapping in the full-size copy replaces the thumbnail, which nothing
         // else references by then.
-        if (previous && previous !== texture) previous.dispose()
+        if (previous && previous !== texture) releaseTexture(previous)
         if (reveal) entry.revealStart = performance.now()
+        // Long enough for the fade-in to finish before the loop rests.
+        this.wake(REVEAL_MS + 100)
       }
       entry.paint = paint
 
       // Tile-sized to begin with; the proxy may be unreachable, in which case
       // the original still works — just heavier.
-      this.loader.load(
-        thumbnailUrl(p.imageUrl),
+      this.loadTexture(
+        thumbnailUrl(p.imageUrl, this.thumbWidth),
         texture => paint(texture, true),
-        undefined,
-        () => this.loader.load(p.imageUrl, texture => paint(texture, true))
+        () => this.loadTexture(p.imageUrl, texture => paint(texture, true))
       )
     }
   }
@@ -923,6 +980,7 @@ export class WallScene {
   ) {
     const focusX = mesh.position.x + this.groupOffsetX()
     const side: -1 | 1 = focusX >= 0 ? 1 : -1
+    this.wake()
     this.expandFocus.set(focusX, mesh.position.y)
     this.expandSide = side
     this.selected = pokemon
@@ -945,10 +1003,50 @@ export class WallScene {
     return -(this.scrollX + this.sweepOffset) - innerWidth / 2 + inset
   }
 
+  /**
+   * Whether anything is still in motion. Everything else that changes the
+   * picture — a pointer, a texture arriving, a call from React — wakes the loop
+   * itself.
+   */
+  private isMoving() {
+    return (
+      this.scrollX + this.sweepOffset !== this.lastScrollX ||
+      this.velocity > 0.01 ||
+      this.bend > 0.001 ||
+      this.expand !== this.expandTo ||
+      this.sweep.phase !== 'idle' ||
+      this.pending.length > 0 ||
+      (this.labelFade > 0 && this.labelFade < 1)
+    )
+  }
+
   /** Labels show for the hovered evolution family, or all when nothing is. */
   private labelMaskFor(pokemon: Pokemon) {
     if (!this.hovered) return 1
     return this.hovered.chainId === pokemon.chainId ? 1 : 0
+  }
+
+  private loadTexture(
+    url: string,
+    onLoad: (texture: THREE.Texture) => void,
+    onError?: () => void
+  ) {
+    if (!this.bitmapLoader) {
+      this.loader.load(url, onLoad, undefined, onError)
+      return
+    }
+    this.bitmapLoader.load(
+      url,
+      bitmap => {
+        const texture = new THREE.Texture(bitmap)
+        // Already flipped while decoding; WebGL ignores flipY for bitmaps.
+        texture.flipY = false
+        texture.needsUpdate = true
+        onLoad(texture)
+      },
+      undefined,
+      onError
+    )
   }
 
   private loop = (time = 0) => {
@@ -958,6 +1056,15 @@ export class WallScene {
     this.onFrame?.(time)
 
     const now = performance.now()
+
+    if (this.isMoving()) this.wake()
+    if (now > this.awakeUntil) {
+      // At rest, the last frame drawn is still the right one. The clock keeps
+      // ticking, so the first frame back measures one real frame — exactly
+      // what it would have measured had the loop never rested.
+      this.lastFrameTime = now
+      return
+    }
 
     if (this.expandTo !== this.expand) {
       const span = this.reduce ? REDUCED_EXPAND_MS : EXPAND_MS
@@ -1034,11 +1141,20 @@ export class WallScene {
     this.layoutRows = metrics.rows
     this.stacked = metrics.stacked
     this.falloff = metrics.stacked ? FALLOFF_NARROW : FALLOFF
+
+    // Tiles already on the wall keep what they loaded; a resize rarely changes
+    // the bucket, and refetching the whole wall for it would cost far more.
+    const device = this.cell * Math.min(devicePixelRatio, 2)
+    this.thumbWidth =
+      THUMB_WIDTHS.find(width => width >= device) ??
+      THUMB_WIDTHS[THUMB_WIDTHS.length - 1]
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') this.collapse()
   }
+
+  private onWake = () => this.wake()
 
   private onPointerCancel = () => {
     this.pendingTap = null
@@ -1051,6 +1167,7 @@ export class WallScene {
    * press on whatever is under the finger.
    */
   private onPointerDown = (event: PointerEvent) => {
+    this.wake()
     this.pendingTap = null
     if (event.button !== 0) return
     if (onOverlay(event)) return
@@ -1064,6 +1181,7 @@ export class WallScene {
   }
 
   private onPointerMove = (event: PointerEvent) => {
+    this.wake()
     this.overPointerOverlay = onOverlay(event)
     this.setPointer(event.clientX, event.clientY)
   }
@@ -1071,9 +1189,11 @@ export class WallScene {
   /** Park the pointer off-screen so nothing stays hovered. */
   private onPointerOut = () => {
     this.pointer.set(-10, -10)
+    this.wake()
   }
 
   private onPointerUp = (event: PointerEvent) => {
+    this.wake()
     const tap = this.pendingTap
     this.pendingTap = null
     if (!tap || tap.id !== event.pointerId) return
@@ -1232,6 +1352,7 @@ export class WallScene {
     if (this.sweep.phase === 'idle') this.relayout()
     else this.relayoutPending = true
 
+    this.wake()
     this.draw()
   }
 
@@ -1399,6 +1520,7 @@ export class WallScene {
     if (found?.id !== this.hovered?.id) {
       this.hovered = found
       this.onHover(found)
+      this.wake()
     }
 
     const now = performance.now()
@@ -1458,6 +1580,36 @@ export class WallScene {
     if (!entry?.paint || entry.upgraded) return
     entry.upgraded = true
     const paint = entry.paint
-    this.loader.load(pokemon.imageUrl, texture => paint(texture, false))
+    this.loadTexture(pokemon.imageUrl, texture => paint(texture, false))
   }
+
+  /** Keep the loop drawing for at least this long. */
+  private wake(ms = IDLE_GRACE_MS) {
+    this.awakeUntil = Math.max(this.awakeUntil, performance.now() + ms)
+  }
+}
+
+/** Free a texture's GPU copy, and an ImageBitmap's decoded pixels with it —
+ *  a bitmap holds them until closed, where an <img> has no equivalent. */
+function releaseTexture(texture: null | THREE.Texture) {
+  if (!texture) return
+  texture.dispose()
+  if (typeof ImageBitmap !== 'undefined' && texture.image instanceof ImageBitmap)
+    texture.image.close()
+}
+
+/**
+ * Whether createImageBitmap honours the options the wall decodes with. Safari
+ * before 17 and Firefox before 98 ignore them and would hand back the artwork
+ * upside down — the same check three's own GLTFLoader makes.
+ */
+function supportsImageBitmap() {
+  if (typeof createImageBitmap === 'undefined') return false
+  const agent = navigator.userAgent
+  const safari = /^((?!chrome|android).)*safari/i.test(agent)
+  const safariVersion = Number(agent.match(/Version\/(\d+)/)?.[1] ?? 0)
+  const firefoxVersion = Number(agent.match(/Firefox\/(\d+)\./)?.[1] ?? 0)
+  if (safari && safariVersion < 17) return false
+  if (firefoxVersion && firefoxVersion < 98) return false
+  return true
 }

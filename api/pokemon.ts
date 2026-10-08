@@ -25,6 +25,12 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     )
 
     res.setHeader('content-type', 'application/json')
+    // The data only changes with a deploy, which clears the CDN, so the edge
+    // can answer repeat pages and searches without starting the function.
+    res.setHeader(
+      'cache-control',
+      'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800'
+    )
     res.end(
       JSON.stringify(
         queryPokemon({

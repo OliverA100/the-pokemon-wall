@@ -11,6 +11,16 @@
          the way early saves a round trip before the first tile can appear. -->
     <link crossorigin href="https://wsrv.nl" rel="preconnect" />
     <link crossorigin href="https://cdn.jsdelivr.net" rel="preconnect" />
+    <!-- The first page of results, fetched alongside the script rather than
+         after it has run and mounted. Must match the URL usePokemonSearch
+         builds for it, byte for byte, or the browser fetches it twice — see
+         PAGE_SIZE in PokemonWallGL.tsx. -->
+    <link
+      as="fetch"
+      crossorigin="anonymous"
+      href="/api/pokemon?limit=60&amp;page=1"
+      rel="preload"
+    />
 
     <title>The Pokémon Wall</title>
     <meta
