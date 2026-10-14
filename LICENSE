@@ -19,19 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The MIT licence above covers this repository's own source code.
-
-Pokémon and all related names, characters and artwork are trademarks of
-Nintendo, Creatures Inc. and GAME FREAK Inc. This is an unofficial,
-non-commercial fan project with no affiliation to, endorsement by, or
-sponsorship from any of them.
-
-Pokémon data is retrieved from PokéAPI (pokeapi.co) and the Pokémon 3D API.
-Official artwork is loaded at runtime from PokéAPI's sprite repository and is
-not redistributed here.
-
-Instrument Sans (public/fonts/) is licensed separately under the SIL Open Font
-License — see public/fonts/OFL.txt.

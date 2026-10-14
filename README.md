@@ -165,15 +165,21 @@ never hits a wall while the next page is in flight.
 
 ## Licence and attribution
 
-The source in this repository is MIT licensed — see [LICENSE](LICENSE).
+The code in this repository is MIT licensed. See [LICENSE](LICENSE). That
+covers only the code I wrote.
 
-Pokémon and all related names, characters and artwork are trademarks of
-Nintendo, Creatures Inc. and GAME FREAK Inc. This is an unofficial,
-non-commercial fan project with no affiliation to, endorsement by, or
-sponsorship from any of them.
+Pokémon and Pokémon character names are trademarks of Nintendo. Pokémon names,
+artwork and Pokédex text are the property of Nintendo, Creatures Inc.,
+GAME FREAK Inc. and The Pokémon Company, and are used here for a
+non-commercial personal project with no affiliation to or endorsement by any of
+them.
 
-Pokémon data comes from [PokéAPI](https://pokeapi.co) and the
-[Pokémon 3D API](https://github.com/Pokemon-3D-api). Official artwork is loaded
-at runtime from PokéAPI's sprite repository rather than redistributed here.
+Pokémon data comes from [PokéAPI](https://pokeapi.co), with names from the
+[Pokémon 3D API](https://github.com/Pokemon-3D-api). It is fetched once by
+`scripts/generate-pokemon.mjs` and committed as a snapshot, in line with
+PokéAPI's fair use policy of caching rather than re-requesting. Official
+artwork is loaded at runtime from PokéAPI's sprite repository and is not stored
+here.
+
 [Instrument Sans](https://fonts.google.com/specimen/Instrument+Sans) is used
-under the SIL Open Font License.
+under the SIL Open Font License; see `public/fonts/OFL.txt`.
