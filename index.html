@@ -40,8 +40,20 @@
       property="og:description"
       content="An interactive wall of every Pokémon. Search by name, type or rarity, hover to light up a whole evolution family, and open any Pokémon for its full stats."
     />
-    <meta property="og:image" content="/icon-512.png" />
-    <meta name="twitter:card" content="summary" />
+    <!-- Absolute, because link scrapers do not reliably resolve a relative one.
+         Source and regeneration steps are in scripts/og-image.html. -->
+    <meta property="og:url" content="https://the-pokemon-wall.vercel.app/" />
+    <meta
+      property="og:image"
+      content="https://the-pokemon-wall.vercel.app/og-image.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Bulbasaur, Charmander and Squirtle on a cream wall, under the title The Pokémon Wall."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body class="antialiased">
     <div id="root"></div>

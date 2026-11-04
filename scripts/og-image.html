@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  The source of public/og-image.png, the picture a shared link unfurls with.
+
+  A static page rather than a script: three tiles from the wall, laid out the
+  way the wall lays them out, under the title. Link cards crop 1.91:1 down to
+  about 1.66:1, so nothing that matters sits within 77px of the left or right
+  edge.
+
+  To regenerate, from the repo root:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+      --allow-file-access-from-files --window-size=1200,630 \
+      --virtual-time-budget=15000 --screenshot=public/og-image.png \
+      "file://$PWD/scripts/og-image.html"
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The Pokémon Wall: social image</title>
+    <style>
+      @font-face {
+        font-family: 'Instrument Sans';
+        src: url('../public/fonts/instrument-sans.woff2')
+          format('woff2-variations');
+        font-weight: 400 700;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      /* Surface and ink from globals.css. */
+      body {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #efece5;
+        color: #16150f;
+        font-family: 'Instrument Sans', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* The indent balances the tracking browsers add after the last letter,
+         which would otherwise sit the title left of the middle tile's centre. */
+      .title {
+        position: absolute;
+        top: 92px;
+        right: 0;
+        left: 0;
+        font-size: 24px;
+        letter-spacing: 0.28em;
+        text-align: center;
+        text-indent: 0.28em;
+        text-transform: uppercase;
+      }
+
+      .tiles {
+        position: absolute;
+        top: 162px;
+        right: 96px;
+        left: 96px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+      }
+      figure {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      img {
+        display: block;
+        width: 290px;
+        height: 290px;
+      }
+      figcaption {
+        margin-top: 22px;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        opacity: 0.6;
+        text-transform: uppercase;
+      }
+      .dots {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .dots i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+
+      /* From TYPE_DOT_COLORS in src/lib/pokemon.ts. */
+      .grass {
+        background: oklch(0.59 0.17 148);
+      }
+      .poison {
+        background: oklch(0.48 0.19 320);
+      }
+      .fire {
+        background: oklch(0.6 0.17 45);
+      }
+      .water {
+        background: oklch(0.52 0.12 240);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="title">The Pokémon Wall</div>
+
+    <div class="tiles">
+      <figure>
+        <img
+          alt=""
+          src="https://cdn.jsdelivr.net/gh/PokeAPI/sprites@master/sprites/pokemon/other/official-artwork/1.png"
+        />
+        <figcaption>Bulbasaur</figcaption>
+        <div class="dots"><i class="grass"></i><i class="poison"></i></div>
+      </figure>
+      <figure>
+        <img
+          alt=""
+          src="https://cdn.jsdelivr.net/gh/PokeAPI/sprites@master/sprites/pokemon/other/official-artwork/4.png"
+        />
+        <figcaption>Charmander</figcaption>
+        <div class="dots"><i class="fire"></i></div>
+      </figure>
+      <figure>
+        <img
+          alt=""
+          src="https://cdn.jsdelivr.net/gh/PokeAPI/sprites@master/sprites/pokemon/other/official-artwork/7.png"
+        />
+        <figcaption>Squirtle</figcaption>
+        <div class="dots"><i class="water"></i></div>
+      </figure>
+    </div>
+  </body>
+</html>
